@@ -1,2 +1,0 @@
-# zmMsgMover
-Zimbra Message Mover

@@ -1,0 +1,246 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use Data::Dumper;
+
+use Getopt::Long 2.25 qw(:config posix_default no_ignore_case);
+use Pod::Usage 1.14;
+
+
+# main loop
+sub main(){
+    # parse options
+    my %opt = ();
+    GetOptions(\%opt, 'help|h', 'man', 'noaction|no-action|n','all',
+              'verbose|v') or exit(1);
+    if ($opt{help})     { pod2usage(1) }
+    if ($opt{man})      { pod2usage(-exitstatus => 0, -verbose => 2, -noperldoc=>1) }
+    if ($opt{noaction}) { 
+       $opt{verbose} = 1 ;
+       warn "*** NO ACTION MODE ***\n";       
+    }
+    my $account = shift @ARGV;
+    my $from = shift @ARGV;
+    my $to = shift @ARGV or pod2usage(-message=>"destination folder is missing");
+
+    $from = "/$from";
+    $to = "/$to";
+    
+    my @accounts;
+    if ($account eq 'ALL'){
+        @accounts = grep /\@/, split /\n/, zmProv->new(noaction=>$opt{noaction},verbose=>$opt{verbose})->cmd('gaa') ;
+    }
+    else {
+        @accounts = ($account);
+    }
+
+    if ($ENV{USER} ne 'zimbra'){
+       pod2usage(-message=>"$0 only works when running as user 'zimbra'");
+    }
+
+    for my $account (@accounts){
+        warn ">> $account <<\n";
+        my $box = zmMailBox->new(verbose=>$opt{verbose},noaction=>$opt{noaction},account=>$account);
+
+        my %folder;        
+        for my $line (split /\n/, $box->cmd('getAllFolders')){
+            $line =~ m{^\s*\S+\s+mess\s+\d+\s+\d+\s+(/.+)} && do {
+                $folder{$1} = 1;
+                next;
+            };
+        }
+        if (not $folder{$from}){
+            warn "  * skipping account $account. no $from folder\n";
+            next;
+        }
+        if (not $folder{$to}){
+        
+            $box->act('renameFolder '.$from.' '.$to);
+            next;
+        }
+        else {
+            my @lines = split /\n/, $box->cmd('search --types message in:"'.$from.'"');
+            my @msgs;
+            while (@lines){
+                my $line = shift @lines;
+                $line =~ /more:\s+true/ && do {
+                    push @lines, split(/\n/, $box->cmd('search --next'));
+                    next;
+                };
+                $line =~ /^\s*\d+\.\s(\d+)/ && do {
+                    push @msgs, $1;
+                };
+            }
+            $box->act('moveMessage '.join(',',@msgs).' "'.$to.'"');
+	    $box->act('deleteFolder "'.$from.'"');
+        }
+    }
+}
+
+
+main;
+
+
+package zmGeneric;
+use strict;
+use warnings;
+use IPC::Open2;
+use IO::Select;
+
+sub new {
+    my $proto = shift;
+    my $class = ref($proto)||$proto;
+
+    my $self = { @_ };
+    bless $self, $class;
+    
+    my $pid = open2(my $outFh,my $inFh,@{$self->{cmd}});
+    $outFh->blocking(0);
+    my $select = IO::Select->new($outFh);    
+    
+    $self->{outFh}    = $outFh;
+    $self->{inFh}     = $inFh;
+    $self->{select} = $select;
+
+    $self->cmd; #initialize
+    return $self;
+}
+
+sub _printRead {
+    my $self = shift;
+    my $cmd = shift;
+    my $inFh = $self->{inFh};
+    print $inFh $cmd."\n" if $cmd;  
+    my $buffer = '';
+    my $prompt = $self->{prompt};
+    while (1){
+        $self->{select}->can_read();
+        my $chunk;        
+        sysread($self->{outFh},$chunk,1024);
+        $buffer .= $chunk;
+        if ($buffer =~ s/${prompt}.*?> $//){
+            last;
+        };
+    }
+    return $buffer;   
+}
+
+sub cmd {
+    my $self = shift;
+    my $cmd = shift;
+    warn "  - $cmd\n" if $self->{verbose} and $cmd;
+    $self->_printRead($cmd);
+}
+
+sub act {
+    my $self = shift;
+    my $cmd = shift;
+    warn "  > $cmd\n" if $self->{verbose} and $cmd;
+    $self->_printRead($cmd) unless $self->{noaction};
+}
+
+
+sub DESTROY {
+    my $self = shift;
+    my $inFh = $self->{inFh};
+    print $inFh "quit\n";
+    close $self->{inFh};
+    close $self->{outFh};    
+    system "stty sane";
+}
+
+1;
+
+package zmMailBox;
+use strict;
+use warnings;
+use base 'zmGeneric';
+
+sub new {
+    my $class = shift;
+    my $opt = { @_ };
+    return $class->SUPER::new(cmd=>['zmmailbox','-z','-m', $opt->{account}],prompt=>'mbox',verbose=>$opt->{verbose},noaction=>$opt->{noaction});
+}
+
+1;
+
+package zmProv;
+use strict;
+use warnings;
+use base 'zmGeneric';
+
+sub new {
+    my $class = shift;
+    my $opt = { @_ };
+    return $class->SUPER::new(cmd=>['zmprov','-l'],prompt=>'prov',verbose=>$opt->{verbose},noaction=>$opt->{noaction});
+}
+
+1;                                           
+
+__END__
+
+=head1 NAME
+
+zmmsgmover - Zimbra Message Mover tool
+
+=head1 SYNOPSIS
+
+B<zmmsgmover> [I<options>...] I<account@domain>|B<ALL> I<src-folder> I<dst-folder>
+
+     --man           show man-page and exit
+ -h, --help          display this help and exit
+     --version       output version information and exit
+     --noaction      just talk don't act
+     --verbose       talk while working
+
+=head1 DESCRIPTION
+
+Migrate messages from one folder to another. Removing the source folder
+after migration.  If the destination folder does not exist, the selected
+mailbox will simply be renamed to the new name.
+
+The initial C</> for folder names is implide. Write F<Sent> and not F</Sent>.
+
+This command has to be executed as the zimbra user. So C<sudo su - zimbra> first.
+
+=head1 EXAMPLES
+
+Move all messages for one account
+
+  zmmsgmover tobi@zimbra.oetiker.ch sent-mail Sent
+
+Move messages for all accunts on the system
+
+  zmmsgmover ALL sent-mail Sent
+
+=head1 COPYRIGHT
+
+Copyright (c) 2016 by OETIKER+PARTNER AG. All rights reserved.
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+=head1 AUTHOR
+
+S<Tobias Oetiker E<lt>tobi@oetiker.chE<gt>>
+
+=head1 HISTORY
+
+ 2016-02-15 to Initial Version
+
+=cut
+            
