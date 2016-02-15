@@ -2,8 +2,6 @@
 
 use strict;
 use warnings;
-use Data::Dumper;
-
 use Getopt::Long 2.25 qw(:config posix_default no_ignore_case);
 use Pod::Usage 1.14;
 
@@ -190,7 +188,6 @@ B<zmmsgmover> [I<options>...] I<account@domain>|B<ALL> I<src-folder> I<dst-folde
 
      --man           show man-page and exit
  -h, --help          display this help and exit
-     --version       output version information and exit
      --noaction      just talk don't act
      --verbose       talk while working
 
@@ -222,7 +219,7 @@ Copyright (c) 2016 by OETIKER+PARTNER AG. All rights reserved.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
-the Free Software Foundation; either version 2 of the License, or
+the Free Software Foundation; either version 3 of the License, or
 (at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
