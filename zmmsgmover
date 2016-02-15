@@ -197,9 +197,9 @@ Migrate messages from one folder to another. Removing the source folder
 after migration.  If the destination folder does not exist, the selected
 mailbox will simply be renamed to the new name.
 
-The initial C</> for folder names is implide. Write F<Sent> and not F</Sent>.
+The initial C</> for folder names is implide. Write C<Sent> and not C</Sent>.
 
-This command has to be executed as the zimbra user. So C<sudo su - zimbra> first.
+This command has to be executed as the zimbra user (C<sudo su - zimbra>).
 
 =head1 EXAMPLES
 
