@@ -66,7 +66,7 @@ sub main(){
                     push @lines, split(/\n/, $box->cmd('search --next'));
                     next;
                 };
-                $line =~ /^\s*\d+\.\s(\d+)/ && do {
+                $line =~ /^\s*\d+\.\s+(\d+)/ && do {
                     push @msgs, $1;
                 };
             }
