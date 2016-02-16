@@ -70,8 +70,13 @@ sub main(){
                     push @msgs, $1;
                 };
             }
-            $box->act('moveMessage '.join(',',@msgs).' "'.$to.'"');
-	    $box->act('deleteFolder "'.$from.'"');
+            if (@msgs){
+                $box->act('moveMessage '.join(',',@msgs).' "'.$to.'"');
+       	        $box->act('deleteFolder "'.$from.'"');
+            }
+            else {
+                warn "  * no messages found\n";
+            }
         }
     }
 }
