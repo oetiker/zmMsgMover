@@ -187,7 +187,7 @@ __END__
 
 =head1 NAME
 
-zmmsgmover - Zimbra Message Mover tool
+zmmsgmover - Zimbra Message Mover
 
 =head1 SYNOPSIS
 
@@ -203,7 +203,7 @@ B<zmmsgmover> [I<options>...] I<account@domain>|B<ALL> I<src-folder> I<dst-folde
 
 Migrate messages from one folder to another. Removing the source folder
 after migration.  If the destination folder does not exist, the selected
-mailbox will simply be renamed to the new name.
+folder will simply be renamed to the new name.
 
 The initial C</> for folder names is implide. Write C<Sent> and not C</Sent>.
 
