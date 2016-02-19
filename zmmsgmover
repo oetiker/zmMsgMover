@@ -14,9 +14,9 @@ sub main(){
               'verbose|v') or exit(1);
     if ($opt{help})     { pod2usage(1) }
     if ($opt{man})      { pod2usage(-exitstatus => 0, -verbose => 2, -noperldoc=>1) }
-    if ($opt{noaction}) { 
+    if ($opt{noaction}) {
        $opt{verbose} = 1 ;
-       warn "*** NO ACTION MODE ***\n";       
+       warn "*** NO ACTION MODE ***\n";
     }
     my $account = shift @ARGV;
     my $from = shift @ARGV;
@@ -24,7 +24,7 @@ sub main(){
 
     $from = "/$from";
     $to = "/$to";
-    
+
     my @accounts;
     if ($account eq 'ALL'){
         @accounts = grep /\@/, split /\n/, zmProv->new(noaction=>$opt{noaction},verbose=>$opt{verbose},debug=>$opt{debug})->cmd('gaa') ;
@@ -41,7 +41,7 @@ sub main(){
         warn ">> $account <<\n";
         my $box = zmMailBox->new(verbose=>$opt{verbose},noaction=>$opt{noaction},account=>$account,debug=>$opt{debug});
 
-        my %folder;        
+        my %folder;
         for my $line (split /\n/, $box->cmd('getAllFolders')){
             $line =~ m{^\s*\S+\s+mess\s+\d+\s+\d+\s+(/.+)} && do {
                 $folder{$1} = 1;
@@ -53,39 +53,37 @@ sub main(){
             next;
         }
         if (not $folder{$to}){
-        
             $box->act('renameFolder '.$from.' '.$to);
             next;
         }
-        else {
-            my @lines = split /\n/, $box->cmd('search --types message in:"'.$from.'"');
-            my @msgs;
-            while (@lines){
-                my $line = shift @lines;
-                $line =~ /more:\s+true/ && do {
-                    push @lines, split(/\n/, $box->cmd('search --next'));
-                    next;
-                };
-                $line =~ /^\s*\d+\.\s+(\d+)/ && do {
-                    push @msgs, $1;
-                };
-            }
-            if (@msgs){
-                $box->act('moveMessage '.join(',',@msgs).' "'.$to.'"');
-            }
-            else {
-                warn "  * no messages found\n";
-            }
-            $box->act('deleteFolder "'.$from.'"');
+
+        my @lines = split /\n/, $box->cmd('search --types message in:"'.$from.'"');
+        my @msgs;
+        while (@lines){
+            my $line = shift @lines;
+            $line =~ /more:\s+true/ && do {
+                push @lines, split(/\n/, $box->cmd('search --next'));
+                next;
+            };
+            $line =~ /^\s*\d+\.\s+(\d+)/ && do {
+                push @msgs, $1;
+            };
         }
+        if (@msgs){
+            $box->act('moveMessage '.join(',',@msgs).' "'.$to.'"');
+        }
+        else {
+            warn "  * no messages found\n";
+        }
+        $box->act('deleteFolder "'.$from.'"');
     }
 }
 
 
 main;
+exit 0;
 
-
-package zmGeneric;
+package nanoExpect;
 use strict;
 use warnings;
 use IPC::Open2;
@@ -97,11 +95,11 @@ sub new {
 
     my $self = { @_ };
     bless $self, $class;
-    my ($outFh, $inFh) = (IO::Handle->new(), IO::Handle->new());	    
+    my ($outFh, $inFh) = (IO::Handle->new(), IO::Handle->new());
     my $pid = open2($outFh,$inFh,@{$self->{cmd}});
     $outFh->blocking(0);
-    my $select = IO::Select->new($outFh);    
-    
+    my $select = IO::Select->new($outFh);
+
     $self->{outFh}    = $outFh;
     $self->{inFh}     = $inFh;
     $self->{select} = $select;
@@ -120,7 +118,7 @@ sub _printRead {
     my $prompt = $self->{prompt};
     while (1){
         $self->{select}->can_read();
-        my $chunk;        
+        my $chunk;
         sysread($self->{outFh},$chunk,1024);
         $buffer .= $chunk;
         if ($buffer =~ s/${prompt}.*?> $//){
@@ -128,7 +126,7 @@ sub _printRead {
         };
     }
     warn "ANSWER: '$buffer'\n" if $self->{debug};
-    return $buffer;   
+    return $buffer;
 }
 
 sub cmd {
@@ -151,7 +149,7 @@ sub DESTROY {
     my $inFh = $self->{inFh};
     print $inFh "quit\n";
     close $self->{inFh};
-    close $self->{outFh};    
+    close $self->{outFh};
     system "stty sane";
 }
 
@@ -160,7 +158,7 @@ sub DESTROY {
 package zmMailBox;
 use strict;
 use warnings;
-use base 'zmGeneric';
+use base 'nanoExpect';
 
 sub new {
     my $class = shift;
@@ -173,7 +171,7 @@ sub new {
 package zmProv;
 use strict;
 use warnings;
-use base 'zmGeneric';
+use base 'nanoExpect';
 
 sub new {
     my $class = shift;
@@ -181,7 +179,7 @@ sub new {
     return $class->SUPER::new(cmd=>['zmprov','-l'],prompt=>'prov',verbose=>$opt->{verbose},noaction=>$opt->{noaction},debug => $opt->{debug});
 }
 
-1;                                           
+1;
 
 __END__
 
@@ -248,4 +246,3 @@ S<Tobias Oetiker E<lt>tobi@oetiker.chE<gt>>
  2016-02-15 to Initial Version
 
 =cut
-            
